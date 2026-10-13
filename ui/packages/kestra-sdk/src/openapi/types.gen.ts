@@ -4,6 +4,8 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+export type AbstractFilterFilterType = 'CONTAINS' | 'ENDS_WITH' | 'EQUAL_TO' | 'GREATER_THAN' | 'GREATER_THAN_OR_EQUAL_TO' | 'IN' | 'IS_FALSE' | 'IS_NOT_NULL' | 'IS_NULL' | 'IS_TRUE' | 'LESS_THAN' | 'LESS_THAN_OR_EQUAL_TO' | 'NOT_CONTAINS' | 'NOT_EQUAL_TO' | 'NOT_IN' | 'OR' | 'REGEX' | 'STARTS_WITH' | 'PREFIX';
+
 export type AbstractFlow = {
     id: string;
     namespace: string;
@@ -1065,7 +1067,7 @@ export type FlowActionCondition = {
     /**
      * How the field is compared to the value.
      */
-    op: QueryFilterOp;
+    operator: AbstractFilterFilterType;
     /**
      * The value the field is compared to.
      *
