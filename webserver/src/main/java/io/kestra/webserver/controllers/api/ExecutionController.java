@@ -95,7 +95,6 @@ import io.kestra.webserver.exceptions.BulkValidationException;
 import io.kestra.webserver.models.api.ApiAsyncOperationResponse;
 import io.kestra.webserver.models.api.ApiExecution;
 import io.kestra.webserver.models.api.ApiLightExecution;
-import io.kestra.webserver.responses.BulkResponse;
 import io.kestra.webserver.responses.PagedResults;
 import io.kestra.webserver.services.ActorResolver;
 import io.kestra.webserver.services.ExecutionDependenciesStreamingService;
@@ -158,7 +157,6 @@ import reactor.core.scheduler.Schedulers;
 import tools.jackson.databind.ObjectMapper;
 
 import static io.kestra.core.models.Label.CORRELATION_ID;
-import static io.kestra.core.utils.Rethrow.throwConsumer;
 import static io.kestra.core.utils.Rethrow.throwFunction;
 
 @Slf4j
@@ -508,27 +506,27 @@ public class ExecutionController {
         }
     }
 
-    @Delete(uri = "/by-ids")
     @ExecuteOn(TaskExecutors.IO)
+    @Delete(uri = "/by-ids")
     @Operation(tags = { "Executions" }, summary = "Delete a list of executions")
-    @ApiResponse(responseCode = "200", description = "On success", content = { @Content(schema = @Schema(implementation = BulkResponse.class)) })
+    @ApiResponse(responseCode = "202", description = "Accepted", content = { @Content(schema = @Schema(implementation = ApiAsyncOperationResponse.class)) })
     @ApiResponse(responseCode = "400", description = "Validation errors", content = { @Content(schema = @Schema(implementation = ProblemDetail.class)) })
-    public HttpResponse<?> deleteExecutionsByIds(
+    public MutableHttpResponse<ApiAsyncOperationResponse> deleteExecutionsByIds(
         @RequestBody(description = "The execution id") @Body List<String> executionsId,
         @Parameter(description = "Whether to delete non-terminated executions") @Nullable @QueryValue(defaultValue = "false") Boolean includeNonTerminated,
         @Parameter(description = "Whether to delete execution logs", required = false) @QueryValue(defaultValue = "true") Boolean deleteLogs,
         @Parameter(description = "Whether to delete execution metrics", required = false) @QueryValue(defaultValue = "true") Boolean deleteMetrics,
-        @Parameter(description = "Whether to delete execution files in the internal storage", required = false) @QueryValue(defaultValue = "true") Boolean deleteStorage) throws IOException {
+        @Parameter(description = "Whether to delete execution files in the internal storage", required = false) @QueryValue(defaultValue = "true") Boolean deleteStorage) {
         List<Execution> executions = getExecutionsByIds(executionsId, "be deleted");
         return deleteExecutions(executions, includeNonTerminated, deleteLogs, deleteMetrics, deleteStorage);
     }
 
-    @Delete(uri = "/by-query")
     @ExecuteOn(TaskExecutors.IO)
+    @Delete(uri = "/by-query")
     @Operation(tags = { "Executions" }, summary = "Delete executions filter by query parameters")
-    @ApiResponse(responseCode = "200", description = "On success", content = { @Content(schema = @Schema(implementation = BulkResponse.class)) })
+    @ApiResponse(responseCode = "202", description = "Accepted", content = { @Content(schema = @Schema(implementation = ApiAsyncOperationResponse.class)) })
     @ApiResponse(responseCode = "400", description = "Validation errors", content = { @Content(schema = @Schema(implementation = ProblemDetail.class)) })
-    public HttpResponse<?> deleteExecutionsByQuery(
+    public MutableHttpResponse<ApiAsyncOperationResponse> deleteExecutionsByQuery(
         @Parameter(
             description = "Filters. PHP-style nested query is used - examples: `filters[timeRange][EQUALS]=PT168H`, `filters[scope][EQUALS]=USER`, `filters[state][IN]=FAILED,CANCELLED`, `filters[labels][NOT_EQUALS][foo]=bar`, `filters[namespace][CONTAINS]=test`",
             in = ParameterIn.QUERY
@@ -537,12 +535,13 @@ public class ExecutionController {
         @Parameter(description = "Whether to delete non-terminated executions") @Nullable @QueryValue(defaultValue = "false") Boolean includeNonTerminated,
         @Parameter(description = "Whether to delete execution logs", required = false) @QueryValue(defaultValue = "true") Boolean deleteLogs,
         @Parameter(description = "Whether to delete execution metrics", required = false) @QueryValue(defaultValue = "true") Boolean deleteMetrics,
-        @Parameter(description = "Whether to delete execution files in the internal storage", required = false) @QueryValue(defaultValue = "true") Boolean deleteStorage) throws IOException {
+        @Parameter(description = "Whether to delete execution files in the internal storage", required = false) @QueryValue(defaultValue = "true") Boolean deleteStorage) {
         var executions = getExecutions(QueryFilterUtils.replaceTimeRangeWithComputedStartDateFilter(filters));
         return deleteExecutions(executions, includeNonTerminated, deleteLogs, deleteMetrics, deleteStorage);
     }
 
-    private HttpResponse<?> deleteExecutions(List<Execution> executions, Boolean includeNonTerminated, Boolean deleteLogs, Boolean deleteMetrics, Boolean deleteStorage) throws IOException {
+    private MutableHttpResponse<ApiAsyncOperationResponse> deleteExecutions(List<Execution> executions, Boolean includeNonTerminated, Boolean deleteLogs, Boolean deleteMetrics,
+        Boolean deleteStorage) {
         validateBulkExecutionACL(executions, BulkOperation.DELETE);
 
         List<ProblemError> invalids = new ArrayList<>();
@@ -562,10 +561,14 @@ public class ExecutionController {
             throw new BulkValidationException("One or more executions could not be deleted.", invalids);
         }
 
-        executions
-            .forEach(throwConsumer(execution -> executionService.delete(execution, deleteLogs, deleteMetrics, deleteStorage)));
-
-        return HttpResponse.ok(BulkResponse.builder().count(executions.size()).build());
+        try {
+            return submitNotifiedBatchAction(
+                CoreAsyncOperationType.EXECUTION_DELETE, executions, (execution, opId, actor) -> executionService.deleteAsync(execution, opId, deleteLogs, deleteMetrics, deleteStorage)
+            );
+        } catch (QueueException e) {
+            // submitNotifiedBatchAction's signature is shared with queue-based bulk actions; deletion never emits onto a queue, so this can never happen.
+            throw new IllegalStateException(e);
+        }
     }
 
     @ExecuteOn(TaskExecutors.IO)
@@ -1944,9 +1947,11 @@ public class ExecutionController {
         }
 
         TaskRun taskRun = execution.findTaskRunByTaskRunIdIfPresent(stateRequest.taskRunId())
-            .orElseThrow(() -> new NoSuchElementException(
-                "Cannot interrupt task run: no task run '%s' on execution '%s'.".formatted(stateRequest.taskRunId(), executionId)
-            ));
+            .orElseThrow(
+                () -> new NoSuchElementException(
+                    "Cannot interrupt task run: no task run '%s' on execution '%s'.".formatted(stateRequest.taskRunId(), executionId)
+                )
+            );
 
         if (State.Type.RUNNING != taskRun.getState().getCurrent()) {
             throw new ConflictException(
@@ -1978,9 +1983,9 @@ public class ExecutionController {
      */
     private static List<String> interruptedTaskRunIds(Execution execution, TaskRun taskRun) {
         return Stream.concat(
-                Stream.of(taskRun),
-                execution.findAllChildren(taskRun).stream().filter(child -> !child.getState().isTerminated())
-            )
+            Stream.of(taskRun),
+            execution.findAllChildren(taskRun).stream().filter(child -> !child.getState().isTerminated())
+        )
             .map(TaskRun::getId)
             .toList();
     }

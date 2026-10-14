@@ -5024,9 +5024,9 @@ export type DeleteExecutionsByIdsError = DeleteExecutionsByIdsErrors[keyof Delet
 
 export type DeleteExecutionsByIdsResponses = {
     /**
-     * On success
+     * Accepted
      */
-    200: BulkResponse;
+    202: ApiAsyncOperationResponse;
 };
 
 export type DeleteExecutionsByIdsResponse = DeleteExecutionsByIdsResponses[keyof DeleteExecutionsByIdsResponses];
@@ -5084,9 +5084,9 @@ export type DeleteExecutionsByQueryError = DeleteExecutionsByQueryErrors[keyof D
 
 export type DeleteExecutionsByQueryResponses = {
     /**
-     * On success
+     * Accepted
      */
-    200: BulkResponse;
+    202: ApiAsyncOperationResponse;
 };
 
 export type DeleteExecutionsByQueryResponse = DeleteExecutionsByQueryResponses[keyof DeleteExecutionsByQueryResponses];

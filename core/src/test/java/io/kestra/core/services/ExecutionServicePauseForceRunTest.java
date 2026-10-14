@@ -2,6 +2,13 @@ package io.kestra.core.services;
 
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import io.kestra.core.async.AsyncOperationService;
 import io.kestra.core.async.AsyncOperationsConfiguration;
 import io.kestra.core.events.CrudEvent;
 import io.kestra.core.models.executions.Execution;
@@ -14,13 +21,9 @@ import io.kestra.core.repositories.LogDataStoreInterface;
 import io.kestra.core.repositories.MetricRepositoryInterface;
 import io.kestra.core.runners.FlowInputOutput;
 import io.kestra.core.storages.StorageInterface;
+import io.kestra.core.utils.ExecutorsUtils;
 
 import io.micronaut.context.event.ApplicationEventPublisher;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -59,7 +62,9 @@ class ExecutionServicePauseForceRunTest {
             mock(DispatchQueueInterface.class),
             mock(AsyncOperationWaiter.class),
             mock(AsyncOperationsConfiguration.class),
-            Optional.empty()
+            Optional.empty(),
+            mock(AsyncOperationService.class),
+            mock(ExecutorsUtils.class)
         );
     }
 
