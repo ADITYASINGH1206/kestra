@@ -2,8 +2,11 @@ package io.kestra.core.models.flows.input;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.api.parallel.Resources;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -108,5 +111,42 @@ class FileInputTest {
 
         // Empty extensions list should not enforce any validation
         assertDoesNotThrow(() -> anyInput.validate(URI.create("file:///path/to/any.file")));
+    }
+
+    @Test
+    void validateUppercaseAllowedFileExtensions() {
+        final FileInput input = FileInput.builder()
+            .id("csvFile")
+            .allowedFileExtensions(List.of(".CSV"))
+            .build();
+
+        assertDoesNotThrow(() -> input.validate(URI.create("file:///path/to/file.csv")));
+    }
+
+    @Test
+    @ResourceLock(Resources.LOCALE)
+    void validateZipUnderTurkishLocale() {
+        final FileInput input = FileInput.builder()
+            .id("zipFile")
+            .allowedFileExtensions(List.of(".zip"))
+            .build();
+
+        Locale defaultLocale = Locale.getDefault();
+        try {
+            Locale.setDefault(Locale.forLanguageTag("tr-TR"));
+            assertDoesNotThrow(() -> input.validate(URI.create("file:///path/to/archive.ZIP")));
+        } finally {
+            Locale.setDefault(defaultLocale);
+        }
+    }
+
+    @Test
+    void validateOpaqueUriWithoutPath() {
+        final FileInput input = FileInput.builder()
+            .id("file")
+            .allowedFileExtensions(List.of(".csv"))
+            .build();
+
+        assertThrows(ConstraintViolationException.class, () -> input.validate(URI.create("kestra:storage")));
     }
 }

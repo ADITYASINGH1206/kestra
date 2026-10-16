@@ -2,6 +2,7 @@ package io.kestra.core.models.flows.input;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 import io.kestra.core.models.flows.Input;
@@ -31,8 +32,11 @@ public class FileInput extends Input<URI> {
      */
     private String getFileExtension(URI uri) {
         String path = uri.getPath();
+        if (path == null) {
+            return "";
+        }
         int lastDotIndex = path.lastIndexOf(".");
-        return lastDotIndex >= 0 ? path.substring(lastDotIndex).toLowerCase() : "";
+        return lastDotIndex >= 0 ? path.substring(lastDotIndex).toLowerCase(Locale.ROOT) : "";
     }
 
     @Override
@@ -42,7 +46,10 @@ public class FileInput extends Input<URI> {
         }
 
         String extension = getFileExtension(input);
-        if (!allowedFileExtensions.contains(extension.toLowerCase())) {
+        boolean isAllowed = allowedFileExtensions.stream()
+            .anyMatch(allowed -> allowed != null && allowed.equalsIgnoreCase(extension));
+
+        if (!isAllowed) {
             throw new ConstraintViolationException(
                 "File type not allowed. Accepted extensions: " + String.join(", ", allowedFileExtensions),
                 Set.of()
