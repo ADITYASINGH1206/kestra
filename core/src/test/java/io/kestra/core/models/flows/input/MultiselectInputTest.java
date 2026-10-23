@@ -194,4 +194,27 @@ class MultiselectInputTest {
         assertThatThrownBy(() -> input.validate(List.of("Prod")))
             .hasMessageContaining("[123, 456]");
     }
+
+    @Test
+    void validateWithExpressionWhenValuesIsNull() {
+        MultiselectInput input = MultiselectInput
+            .builder()
+            .id("id")
+            .expression("{{ values }}")
+            .build();
+
+        input.validate(List.of("foo"));
+        input.validate(null);
+    }
+
+    @Test
+    void validateWithNullInputsWhenValuesPresent() {
+        MultiselectInput input = MultiselectInput
+            .builder()
+            .id("id")
+            .values(List.of(new ValueOption("Prod", "123")))
+            .build();
+
+        input.validate(null);
+    }
 }

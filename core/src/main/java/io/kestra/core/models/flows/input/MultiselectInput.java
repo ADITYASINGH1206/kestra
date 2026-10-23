@@ -70,22 +70,24 @@ public class MultiselectInput extends Input<List<String>> implements ItemTypeInt
 
     @Override
     public void validate(List<String> inputs) throws ConstraintViolationException {
-        Set<ConstraintViolation<?>> violations = new HashSet<>();
+        // values is null when the options come from an expression that has not been rendered yet.
+        if (this.getAllowCustomValue() || this.values == null || inputs == null) {
+            return;
+        }
 
-        if (!this.getAllowCustomValue()) {
-            Set<String> allowedValues = this.values.stream().map(ValueOption::value).collect(java.util.stream.Collectors.toSet());
-            for (String input : inputs) {
-                if (!allowedValues.contains(input)) {
-                    violations.add(
-                        ManualConstraintViolation.of(
-                            "value `" + input + "` doesn't match the values `" + this.values.stream().map(ValueOption::value).toList() + "`",
-                            this,
-                            MultiselectInput.class,
-                            getId(),
-                            input
-                        )
-                    );
-                }
+        Set<ConstraintViolation<?>> violations = new HashSet<>();
+        Set<String> allowedValues = this.values.stream().map(ValueOption::value).collect(java.util.stream.Collectors.toSet());
+        for (String input : inputs) {
+            if (!allowedValues.contains(input)) {
+                violations.add(
+                    ManualConstraintViolation.of(
+                        "value `" + input + "` doesn't match the values `" + this.values.stream().map(ValueOption::value).toList() + "`",
+                        this,
+                        MultiselectInput.class,
+                        getId(),
+                        input
+                    )
+                );
             }
         }
         if (!violations.isEmpty()) {
