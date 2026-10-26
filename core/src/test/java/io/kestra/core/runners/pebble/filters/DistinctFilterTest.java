@@ -74,7 +74,13 @@ class DistinctFilterTest {
         assertThat(render).isEqualTo("[]");
 
         render = variableRenderer.render("{{ null | distinct }}", Map.of());
-        assertThat(render).isEqualTo("null");
+        assertThat(render).isNullOrEmpty();
+
+        String defaultRender = variableRenderer.render("{{ (null | distinct) ?? 'fallback' }}", Map.of());
+        assertThat(defaultRender).isEqualTo("fallback");
+
+        String nullTestRender = variableRenderer.render("{% if (null | distinct) is not null %}truthy{% else %}falsy{% endif %}", Map.of());
+        assertThat(nullTestRender).isEqualTo("falsy");
     }
 
     @Test
